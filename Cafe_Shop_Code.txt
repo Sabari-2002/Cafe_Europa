@@ -1,0 +1,382 @@
+from tkinter import *
+from tkinter import messagebox
+from PIL import Image, ImageTk
+import mysql.connector
+from mysql.connector import Error
+from datetime import datetime
+import os
+import hashlib
+from decimal import Decimal, ROUND_HALF_UP
+
+
+
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "1234",
+    "database": "cafe_coffee_day"
+}
+
+# ---------------- PASSWORD HASHING ---------------- #
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ---------------- DATABASE UTILITY ---------------- #
+def connect_db():
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        return conn
+    except Error as e:
+        messagebox.showerror("Database Error", f"Failed to connect: {e}")
+        return None
+
+def save_to_db(username, password, mobile):
+    conn = connect_db()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
+            if cursor.fetchone():
+                messagebox.showwarning("Username Exists", "Please choose another username!")
+                return False
+            sql = "INSERT INTO users (username, password, mobile) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (username, hash_password(password), mobile))
+            conn.commit()
+            return True
+    except Error as e:
+        messagebox.showerror("Database Error", f"Failed to save data: {e}")
+        return False
+    finally:
+        conn.close()
+
+def validate_login(username, password):
+    conn = connect_db()
+    if not conn:
+        return False
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
+            row = cursor.fetchone()
+            if not row:
+                return False
+
+            stored_password = row["password"]
+            entered_hash = hash_password(password)
+
+            if stored_password == entered_hash:
+                return True
+            elif stored_password == password:
+                cursor.execute(
+                    "UPDATE users SET password=%s WHERE username=%s",
+                    (entered_hash, username)
+                )
+                conn.commit()
+                print(f"[INFO] Upgraded password for {username} to hashed version.")
+                return True
+            return False
+
+    except Error as e:
+        messagebox.showerror("Database Error", f"Login failed: {e}")
+        return False
+    finally:
+        conn.close()
+
+# ---------------- MAIN APP ---------------- #
+# ---------------- MAIN APP ---------------- #
+class CafeApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Cafe_Europa")
+        self.root.geometry("1280x800+0+0")
+        self.logged_in_user = None
+        self.cart = {}
+        self.show_login_page()  # Start with login page
+
+    # ---------------- LOGIN PAGE ---------------- #
+    def show_login_page(self):
+        self.clear_root()  # Remove old widgets
+
+        # Background image
+        bg_image = Image.open("Background.jpg").resize((1280, 800), Image.Resampling.LANCZOS)
+        self.bg_photo = ImageTk.PhotoImage(bg_image)
+        Label(self.root, image=self.bg_photo).place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Greeting label
+        Label(self.root, text="Hello, Buddy \n Seamless Access, Anytime Anywhere",
+              font=("Arial", 30)).pack(fill="x", pady=20)
+        
+        # Logo outside the frame
+        logo_img = Image.open("cafe_logo.png").resize((80,80))
+        logo_photo = ImageTk.PhotoImage(logo_img)
+        logo_label = Label(self.root, image=logo_photo, bg="#E5AA70")
+        logo_label.image = logo_photo  
+        logo_label.place(x=180, y=25)  # Logo fixed on top left
+
+        # Login frame
+        frame = Frame(self.root, bg="#E5AA70", bd=5, relief=RAISED)
+        frame.place(x=470, y=150, width=350, height=400)
+
+        Label(frame, text="USERNAME:", font=("Arial",16), bg="#E5AA70").pack(pady=10)
+        self.username_entry = Entry(frame, font=("Arial",15))
+        self.username_entry.pack(pady=5)
+
+        Label(frame, text="PASSWORD:", font=("Arial",16), bg="#E5AA70").pack(pady=10)
+        self.password_entry = Entry(frame, font=("Arial",15), show="*")
+        self.password_entry.pack(pady=5)
+
+        # Buttons
+        Button(frame, text="LOGIN", font=("Arial",12), bg="green", fg="white",
+               command=self.login).pack(pady=20)
+        Label(frame, text="Don't have an account?", font=("Arial",10), bg="#E5AA70").pack(pady=5)
+        Button(frame, text="SIGN-UP", font=("Arial",12), bg="red", fg="white",
+               command=self.show_signup_page).pack(pady=10)
+
+    # ---------------- LOGIN FUNCTION ---------------- #
+    def login(self):
+        user = self.username_entry.get()
+        password = self.password_entry.get()
+        if validate_login(user, password):
+            self.logged_in_user = user
+            messagebox.showinfo("Login Successful", f"Welcome, {user}!")
+            self.show_menu_page()  # Go to menu page
+        else:
+            messagebox.showerror("Login Failed", "Invalid Username or Password")
+
+    # ---------------- SIGN-UP PAGE ---------------- #
+    def show_signup_page(self):
+        self.clear_root()
+
+        # Background image
+        bg_image = Image.open("Background_2.jpg").resize((1280, 800), Image.Resampling.LANCZOS)
+        self.bg_photo = ImageTk.PhotoImage(bg_image)
+        Label(self.root, image=self.bg_photo).place(x=0, y=0, relwidth=1, relheight=1)
+
+        Label(self.root, text="Hey Buddy, Create an Account Here!", font=("Arial",30)).pack(fill="x", pady=30)
+
+        # Signup frame
+        frame = Frame(self.root, bg="#E5AA70", bd=5, relief=RAISED)
+        frame.place(x=470, y=150, width=350, height=400)
+
+        # Form fields
+        Label(frame, text="Enter new Username:", font=("Arial",16), bg="#E5AA70").pack(pady=10)
+        self.new_username_entry = Entry(frame, font=("Arial",15))
+        self.new_username_entry.pack(pady=5)
+
+        Label(frame, text="Enter new Password:", font=("Arial",16), bg="#E5AA70").pack(pady=10)
+        self.new_password_entry = Entry(frame, font=("Arial",15), show="*")
+        self.new_password_entry.pack(pady=5)
+
+        Label(frame, text="Enter Mobile number:", font=("Arial",16), bg="#E5AA70").pack(pady=10)
+        self.mobile_entry = Entry(frame, font=("Arial",15))
+        self.mobile_entry.pack(pady=5)
+
+        # Buttons
+        Button(frame, text="SIGN UP", font=("Arial",12), bg="blue", fg="white",
+               command=self.signup).pack(pady=20)
+        Button(frame, text="BACK", font=("Arial",12), bg="gray", fg="white",
+               command=self.show_login_page).pack(pady=10)
+
+    # ---------------- SIGNUP FUNCTION ---------------- #
+    def signup(self):
+        username = self.new_username_entry.get()
+        password = self.new_password_entry.get()
+        mobile = self.mobile_entry.get()
+
+        # Validate input
+        if not username or not password or not mobile:
+            messagebox.showwarning("Missing Info", "Please enter all details!")
+        elif not mobile.isdigit() or len(mobile) != 10:
+            messagebox.showwarning("Invalid Mobile", "Mobile number must be 10 digits!")
+        elif save_to_db(username, password, mobile):
+            messagebox.showinfo("Sign Up", "Account Created Successfully!")
+            self.show_login_page()
+        else:
+            messagebox.showerror("Sign Up", "Failed to save data to Database!")
+
+    # ---------------- MENU PAGE ---------------- #
+    def show_menu_page(self):
+        self.clear_root()  # Remove previous widgets
+        self.cart = {}  # Reset cart
+
+        # Background
+        bg_image = Image.open("Background.jpg").resize((1280, 800), Image.Resampling.LANCZOS)
+        self.bg_photo = ImageTk.PhotoImage(bg_image)
+        Label(self.root, image=self.bg_photo).place(x=0, y=0, relwidth=1, relheight=1)
+
+        Label(self.root, text="Brew Your Choice, Place Your Order!", font=("Arial",30)).pack(fill="x", pady=20)
+
+        # Fetch menu items from DB
+        try:
+            conn = connect_db()
+            if conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT item_name, price FROM menu_items")
+                    self.menu_items = cursor.fetchall()
+                conn.close()
+            else:
+                self.menu_items = []
+        except Error as e:
+            messagebox.showerror("Database Error", f"Failed to fetch menu: {e}")
+            self.menu_items = []
+
+        # Left frame for menu
+        left_frame = Frame(self.root, bg="#4A403C", bd=5, relief=RAISED)
+        left_frame.place(x=20, y=80, width=600, height=630)
+
+        headings = ["Items", "Price", "Quantity"]
+        for col in range(3):
+            Label(left_frame, text=headings[col], font=("Arial",16), fg="white", bg="#4A403C",
+                  width=12).grid(row=0, column=col, padx=15, pady=10)
+
+        self.menu_items_dict = {item: price for item, price in self.menu_items}  # Dict for price lookup
+
+        # Right frame for order summary
+        right_frame = Frame(self.root, bg="#4A403C", bd=5, relief=RAISED)
+        right_frame.place(x=660, y=80, width=600, height=580)
+        Label(right_frame, text="Your Order", font=("Arial",20,"bold"), bg="#4A403C", fg="white").pack(pady=10)
+        self.order_display_frame = Frame(right_frame, bg="#4A403C")
+        self.order_display_frame.pack(fill=BOTH, expand=True, padx=10, pady=10)
+
+        # Menu items with + / - buttons
+        for i, (item, price) in enumerate(self.menu_items, start=1):
+            Label(left_frame, text=item, font=("Arial",16), bg="#4A403C", fg="white").grid(
+                row=i, column=0, padx=10, pady=5, sticky="w"
+            )
+            Label(left_frame, text=f"₹{price}", font=("Arial",14), bg="#4A403C", fg="white").grid(
+                row=i, column=1, padx=10, pady=5
+            )
+            btn_frame = Frame(left_frame, bg="#4A403C")
+            btn_frame.grid(row=i, column=2, padx=10)
+            Button(btn_frame, text="-", font=("Arial",12), width=3,
+                   command=lambda i=item: self.remove_from_cart(i)).pack(side=LEFT, padx=5)
+            Button(btn_frame, text="+", font=("Arial",12), width=3,
+                   command=lambda i=item: self.add_to_cart(i)).pack(side=LEFT, padx=5)
+
+        # Place Order & Logout buttons
+        Button(self.root, text="Place Order", font=("Arial",16), bg="green", fg="white",
+               command=self.place_order).place(x=1050, y=670)
+        Button(self.root, text="LOGOUT", font=("Arial",12), bg="gray", fg="white",
+               command=self.logout).place(x=1190, y=680)
+
+        self.update_order_display()  # Refresh order summary
+
+    # ---------------- CART FUNCTIONS ---------------- #
+    def add_to_cart(self, item):
+        price = self.menu_items_dict[item]
+        if item in self.cart:
+            self.cart[item]['qty'] += 1
+            self.cart[item]['total'] += price
+        else:
+            self.cart[item] = {'qty': 1, 'total': price}
+        self.update_order_display()  # Refresh display
+
+    def remove_from_cart(self, item):
+        if item in self.cart:
+            price = self.menu_items_dict[item]
+            self.cart[item]['qty'] -= 1
+            self.cart[item]['total'] -= price
+            if self.cart[item]['qty'] <= 0:
+                del self.cart[item]
+        self.update_order_display()
+
+    # ---------------- DISPLAY CART ---------------- #
+    def update_order_display(self):
+        if not hasattr(self, 'order_display_frame'):
+            return
+        for widget in self.order_display_frame.winfo_children():
+            widget.destroy()
+
+        total_amount = 0
+        for i, (item, data) in enumerate(self.cart.items()):
+            Label(self.order_display_frame, text=item, font=("Arial",14), fg="white", bg="#4A403C",
+                  width=20, anchor="w").grid(row=i, column=0, padx=5, pady=5)
+            Label(self.order_display_frame, text=f"Qty: {data['qty']}", font=("Arial",14), fg="white",
+                  bg="#4A403C", width=8).grid(row=i, column=1, padx=5)
+            Label(self.order_display_frame, text=f"₹{data['total']}", font=("Arial",14), fg="white",
+                  bg="#4A403C", width=8).grid(row=i, column=2, padx=5)
+            total_amount += data['total']
+
+        if self.cart:
+            Label(self.order_display_frame, text="------------------------", font=("Arial",14), fg="white", bg="#4A403C").grid(
+                row=len(self.cart), column=0, columnspan=3
+            )
+            Label(self.order_display_frame, text=f"Total: ₹{total_amount}", font=("Arial",16,"bold"), fg="yellow", bg="#4A403C").grid(
+                row=len(self.cart)+1, column=0, columnspan=3, pady=10
+            )
+
+    # ---------------- PLACE ORDER ---------------- #
+    def place_order(self):
+        if not self.cart:
+            messagebox.showwarning("Empty Cart", "Please add items to your cart before placing an order.")
+            return
+
+        total = sum(Decimal(str(data['total'])) for data in self.cart.values())
+        gst_rate = Decimal('0.18')
+        gst_amount = (total * gst_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        grand_total = (total + gst_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        username = self.logged_in_user
+
+        # Save to DB
+        try:
+            conn = connect_db()
+            if conn:
+                with conn.cursor() as cursor:
+                    for item, data in self.cart.items():
+                        cursor.execute(
+                            "INSERT INTO orders (username, item_name, quantity, total_price) VALUES (%s, %s, %s, %s)",
+                            (username, item, data['qty'], float(data['total']))
+                        )
+                    conn.commit()
+                conn.close()
+        except Error as e:
+            messagebox.showerror("Order Error", f"Failed to save order to DB: {e}")
+            return
+
+        # Save order to file
+        if not os.path.exists("Orders"):
+            os.makedirs("Orders")
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"Orders/{username}_order_{timestamp}.txt"
+        try:
+            with open(filename, "w", encoding="utf-8") as file:
+                file.write(f"Order Details for {username}\n")
+                file.write("-"*40 + "\n")
+                for item, data in self.cart.items():
+                    file.write(f"{item} | Qty: {data['qty']} | ₹{data['total']}\n")
+                file.write("-"*40 + "\n")
+                file.write(f"Subtotal: ₹{total}\n")
+                file.write(f"GST (18%): ₹{gst_amount}\n")
+                file.write(f"Grand Total: ₹{grand_total}\n")
+                file.write(f"Order Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        except Exception as e:
+            messagebox.showerror("File Error", f"Failed to save order: {e}")
+            return
+
+        messagebox.showinfo(
+            "Order Placed",
+            f"Your order has been placed!\nSubtotal: ₹{total}\nGST: ₹{gst_amount}\nGrand Total: ₹{grand_total}"
+        )
+        self.cart.clear()
+        self.update_order_display()
+
+    # ---------------- LOGOUT ---------------- #
+    def logout(self):
+        self.logged_in_user = None
+        self.cart.clear()
+        self.show_login_page()
+
+    # ---------------- UTILITY ---------------- #
+    def clear_root(self):
+        # Delete all widgets in root
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+
+# ---------------- MAIN ---------------- #
+if __name__ == "__main__":
+    root = Tk()
+    app = CafeApp(root)
+    root.mainloop()

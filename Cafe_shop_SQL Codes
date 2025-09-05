@@ -1,0 +1,49 @@
+-- -------------------- CREATE DATABASE -------------------- --
+CREATE DATABASE IF NOT EXISTS cafe_coffee_day;
+USE cafe_coffee_day;
+
+-- -------------------- USERS TABLE -------------------- --
+DROP TABLE IF EXISTS users;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    mobile VARCHAR(15) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert a test user
+INSERT INTO users (username, password, mobile)
+VALUES ('SABARI', '1234', '7695894003');
+
+-- -------------------- MENU ITEMS TABLE -------------------- --
+DROP TABLE IF EXISTS menu_items;
+
+CREATE TABLE menu_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_name VARCHAR(100) NOT NULL,
+    price DECIMAL(10,2) NOT NULL
+);
+
+-- Insert default menu items
+INSERT INTO menu_items (item_name, price) VALUES
+('Cappuccino', 149),
+('Café Latte', 159),
+('Espresso', 119),
+('Chicken Tikka Sandwich', 199),
+('Cheese Garlic Bread', 129),
+('Classic Veg Burger', 169),
+('Choco Lava Cake', 149),
+('Muffins', 99),
+('Brownie with Ice Cream', 179),
+('Lemon Iced Tea', 119),
+('Mango Smoothies', 149),
+('Chocolate Milk Shake', 169);
+
+-- -------------------- VIEW DATA -------------------- --
+-- View all users
+SELECT * FROM users;
+
+-- View all menu items
+SELECT * FROM menu_items;
